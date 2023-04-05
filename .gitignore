@@ -1,0 +1,7 @@
+build/lib/teimsformer/
+__pycache__/
+*.egg-info/
+output/
+data/
+.vscode/
+dataset/my

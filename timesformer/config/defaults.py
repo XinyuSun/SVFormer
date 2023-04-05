@@ -74,6 +74,20 @@ _C.TRAIN.CHECKPOINT_EPOCH_RESET = False
 # If set, clear all layer names according to the pattern provided.
 _C.TRAIN.CHECKPOINT_CLEAR_NAME_PATTERN = ()  # ("backbone.",)
 
+_C.TRAIN.GAMMA = 0.3
+
+_C.TRAIN.GAMMA1 = 2
+
+_C.TRAIN.GAMMA2 = 2
+
+_C.TRAIN.WARM_EPOCH = 0
+
+_C.TRAIN.EMA = 0.99
+
+_C.TRAIN.BETA = 10
+
+_C.TRAIN.DELTA = 0.3
+
 # ---------------------------------------------------------------------------- #
 # Testing options
 # ---------------------------------------------------------------------------- #
@@ -785,6 +799,14 @@ _C.DEMO.COMMON_CLASS_NAMES = [
 # Slow-motion rate for the visualization. The visualized portions of the
 # video will be played `_C.DEMO.SLOWMO` times slower than usual speed.
 _C.DEMO.SLOWMO = 1
+
+
+# MME config
+_C.MME = CfgNode()
+_C.MME.HOG_NBINS = 9
+_C.MME.TRAJ_LEN = 4
+_C.MME.TRAJ_MAX_LEN = 4
+
 
 def _assert_and_infer_cfg(cfg):
     # BN assertions.

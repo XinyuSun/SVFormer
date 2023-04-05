@@ -331,7 +331,7 @@ class VisionTransformer(nn.Module):
         return x[:, 0]
 
     def forward(self, x, mask=None, noisy = None):
-        x_fea = self.forward_features(x, mask, noisy)
+        x_fea = self.forward_features(x, mask)
 
         return x_fea
 
@@ -492,7 +492,7 @@ class vit_base_patch16_224(nn.Module):
         self.attention_type = cfg.TIMESFORMER.ATTENTION_TYPE
         self.model.default_cfg = default_cfgs['vit_base_patch16_224']
         self.num_patches = (cfg.DATA.TRAIN_CROP_SIZE // patch_size) * (cfg.DATA.TRAIN_CROP_SIZE // patch_size)
-        pretrained_model= cfg.TIMESFORMER.PRETRAIN_PATH
+        pretrained_model= cfg.TIMESFORMER.PRETRAINED_MODEL
         if self.pretrained:
             load_pretrained(self.model, num_classes=self.model.num_classes, in_chans=kwargs.get('in_chans', 3), filter_fn=_conv_filter, img_size=cfg.DATA.TRAIN_CROP_SIZE, num_patches=self.num_patches, attention_type=self.attention_type, pretrained_model=pretrained_model)
 
@@ -512,7 +512,7 @@ class vit_base_patch16_224_mix(nn.Module):
         self.attention_type = cfg.TIMESFORMER.ATTENTION_TYPE
         self.model.default_cfg = default_cfgs['vit_base_patch16_224']
         self.num_patches = (cfg.DATA.TRAIN_CROP_SIZE // patch_size) * (cfg.DATA.TRAIN_CROP_SIZE // patch_size)
-        pretrained_model= cfg.TIMESFORMER.PRETRAIN_PATH
+        pretrained_model= cfg.TIMESFORMER.PRETRAINED_MODEL
         if self.pretrained:
             load_pretrained(self.model, num_classes=self.model.num_classes, in_chans=kwargs.get('in_chans', 3), filter_fn=_conv_filter, img_size=cfg.DATA.TRAIN_CROP_SIZE, num_patches=self.num_patches, attention_type=self.attention_type, pretrained_model=pretrained_model)
         self.head = nn.Linear(768, self.model.num_classes) if self.model.num_classes > 0 else nn.Identity()

@@ -363,7 +363,8 @@ def ssl_train_epoch(
             loss.backward()
             if (cur_iter + 1) % num_iters == 0:
                 for p in model.parameters():
-                    p.grad /= num_iters
+                    if p.grad is not None:
+                        p.grad /= num_iters
                 optimizer.step()
                 optimizer.zero_grad()
 
@@ -691,7 +692,7 @@ def train(cfg):
     # Create the video train and val loaders.
     train_loader = loader.construct_loader(cfg, "train")
     val_loader = loader.construct_loader(cfg, "val")
-    unlabel_loader = loader.construct_loader(cfg, "unlabel")
+    unlabel_loader = loader.construct_loader(cfg, "unlabel2")
 
     precise_bn_loader = (
         loader.construct_loader(cfg, "train", is_precise_bn=True)

@@ -21,6 +21,7 @@ import copy
 
 import numpy as np
 from timesformer.models.vit import vit_base_patch16_224
+from timesformer.models.vanilla_vit import semi_m3video_base_patch16_224
 
 # Number of blocks for different stages given the model depth.
 _MODEL_STAGE_DEPTH = {50: (3, 4, 6, 3), 101: (3, 4, 23, 3)}

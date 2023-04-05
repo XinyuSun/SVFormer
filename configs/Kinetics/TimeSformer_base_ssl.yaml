@@ -16,7 +16,7 @@ DATA:
   INPUT_CHANNEL_NUM: [3]
 TIMESFORMER:
   ATTENTION_TYPE: 'divided_space_time'
-  PRETRAIN_PATH: '/mnt/blob/vit_base_p16_224.pth'
+  PRETRAINED_MODEL: 'output/vit_base_p16_224.pth'
 SOLVER:
   BASE_LR: 0.005
   LR_POLICY: steps_with_relative_lrs

@@ -501,6 +501,87 @@ class vit_base_patch16_224(nn.Module):
         return x
 
 
+class PretrainVisionTransformerDecoder(nn.Module):
+    """ Vision Transformer with support for patch or hybrid CNN input stage
+    """
+    def __init__(self, patch_size=16, num_classes=768, embed_dim=768, depth=12,
+                 num_heads=12, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop_rate=0., attn_drop_rate=0.,
+                 drop_path_rate=0., norm_layer=nn.LayerNorm, init_values=None,
+                 activation=None
+                 ):
+        super().__init__()
+        self.num_classes = num_classes
+        # logger.warning(f'num_classes is {self.num_classes}')
+        # assert num_classes == 3 * tubelet_size * patch_size ** 2 or num_classes == 9 * (patch_size // 8) ** 2
+        self.num_features = self.embed_dim = embed_dim  # num_features for consistency with other models
+        self.patch_size = patch_size
+
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, depth)]  # stochastic depth decay rule
+        self.blocks = nn.ModuleList([
+            Block(
+                dim=embed_dim, num_heads=num_heads, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
+                drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[i], norm_layer=norm_layer,
+                init_values=init_values)
+            for i in range(depth)])
+        self.norm =  norm_layer(embed_dim)
+        self.reset_classifier(num_classes, activation)
+
+        self.apply(self._init_weights)
+
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.xavier_uniform_(m.weight)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+
+    def get_num_layers(self):
+        return len(self.blocks)
+
+    @torch.jit.ignore
+    def no_weight_decay(self):
+        return {'pos_embed', 'cls_token'}
+
+    def get_classifier(self):
+        return self.head
+
+    def reset_classifier(self, num_classes, activation, global_pool=''):
+        self.num_classes = num_classes if isinstance(num_classes, list) else [num_classes]
+        self.activation = activation if isinstance(activation, list) else [activation]
+        
+        self.head = nn.ModuleList()
+        for i,nc in enumerate(self.num_classes):       
+            self.head.append(nn.Sequential(
+                nn.Linear(self.embed_dim, 512),
+                nn.GELU(),
+                nn.Linear(512, nc),
+                nn.Dropout(0.),
+                self.activation[i]()
+            ))
+        print(self.head)
+
+    def forward(self, x, return_token_num):
+        for blk in self.blocks:
+            x = blk(x)
+            
+        if return_token_num > 0:
+            x = x[:, -return_token_num:]
+            
+        x = self.norm(x)
+        
+        y = list()
+        for i in range(len(self.head)):
+            y.append(self.head[i](x))
+
+        if len(y) == 1:
+            y = y[0]
+
+        return y
+
+
 @MODEL_REGISTRY.register()
 class vit_base_patch16_224_mix(nn.Module):
     def __init__(self, cfg, **kwargs):
@@ -523,3 +604,59 @@ class vit_base_patch16_224_mix(nn.Module):
         return x
 
 
+@MODEL_REGISTRY.register()
+class vit_base_patch16_224_mme(nn.Module):
+    def __init__(self, cfg, **kwargs):
+        super(vit_base_patch16_224_mme, self).__init__()
+        self.pretrained=True
+        patch_size = 16
+        self.encoder = VisionTransformer(
+            img_size=cfg.DATA.TRAIN_CROP_SIZE, 
+            num_classes=cfg.MODEL.NUM_CLASSES, 
+            patch_size=patch_size, 
+            embed_dim=768, 
+            depth=12, 
+            num_heads=12, 
+            mlp_ratio=4, 
+            qkv_bias=True, 
+            norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+            drop_rate=0., 
+            attn_drop_rate=0., 
+            drop_path_rate=0.1, 
+            num_frames=cfg.DATA.NUM_FRAMES, 
+            attention_type=cfg.TIMESFORMER.ATTENTION_TYPE, 
+            **kwargs
+        )
+
+        self.attention_type = cfg.TIMESFORMER.ATTENTION_TYPE
+        self.encoder.default_cfg = default_cfgs['vit_base_patch16_224']
+        self.num_patches = (cfg.DATA.TRAIN_CROP_SIZE // patch_size) * (cfg.DATA.TRAIN_CROP_SIZE // patch_size)
+        pretrained_model= cfg.TIMESFORMER.PRETRAINED_MODEL
+        if self.pretrained:
+            load_pretrained(self.encoder, num_classes=self.encoder.num_classes, in_chans=kwargs.get('in_chans', 3), filter_fn=_conv_filter, img_size=cfg.DATA.TRAIN_CROP_SIZE, num_patches=self.num_patches, attention_type=self.attention_type, pretrained_model=pretrained_model)
+        self.head = nn.Linear(768, self.encoder.num_classes) if self.encoder.num_classes > 0 else nn.Identity()
+        
+        decoder_num_classes = [108, 48]
+        decoder_act = [nn.Sigmoid, nn.Tanh]
+        self.decoder = nn.ModuleList([PretrainVisionTransformerDecoder(
+            patch_size=patch_size, 
+            num_classes=decoder_num_classes[i], 
+            activation=decoder_act[i],
+            embed_dim=384, 
+            depth=1,
+            num_heads=12, 
+            mlp_ratio=4, 
+            qkv_bias=True, 
+            qk_scale=None, 
+            drop_rate=0., 
+            attn_drop_rate=0.,
+            drop_path_rate=0.1, 
+            norm_layer=partial(nn.LayerNorm, eps=1e-6), 
+            init_values=0.,
+        ) for i in range(self.decoder_num)])
+
+    def forward(self, x_fast, mask=None):
+        token_fast = self.encoder(x_fast,mask)
+        logits = self.head(token_fast) # classification
+        pred = self.decoder(token_fast) # motion trajectory
+        return logits, pred
